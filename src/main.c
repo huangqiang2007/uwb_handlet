@@ -46,7 +46,7 @@ void clockConfig(void)
 	//CMU_ClockDivSet(cmuClock_HF, cmuClkDiv_2);
 	CMU_ClockEnable(cmuClock_HFPER, true);
 	CMU_ClockEnable(cmuClock_GPIO, true);
-	CMU_ClockEnable(cmuClock_USART0, true);
+	//CMU_ClockEnable(cmuClock_USART0, true);
 	CMU_ClockEnable(cmuClock_TIMER0, true);
 	CMU_ClockEnable(cmuClock_TIMER1, true);
 }
@@ -115,6 +115,14 @@ void spiDMA_test(dwDevice_t *dev)
 		dwSpiRead(dev, 0x04, 0x00, buf, 4);
 	}
 }
+
+void uart_rx_test(void)
+{
+	while (1) {
+		checkSleepCMD(&g_rcvMessage);
+	}
+}
+
 int main(void)
 
 {
@@ -153,6 +161,8 @@ int main(void)
 	 * */
 	uartSetup();
 
+	//uart_rx_test();
+
 	/*
 	 * SPI master config
 	 * */
@@ -183,8 +193,8 @@ int main(void)
   	UDELAY_Calibrate();
   	Delay_ms(500);
 
-	dwNewReceive(&g_dwDev);
-	dwStartReceive(&g_dwDev);
+//	dwNewReceive(&g_dwDev);
+//	dwStartReceive(&g_dwDev);
 
 	while (1) {
 		/*
@@ -210,7 +220,9 @@ int main(void)
 			case MAIN_SLEEPMODE:
 				sleepSlave(&g_dwDev);
 				break;
-
+			case MAIN_CENTERSLEEPMODE:
+				sleepCenter(&g_dwDev);
+				break;
 			case DEFAULT_MODE:
 				g_cur_mode = DEFAULT_MODE;
 				break;
@@ -220,7 +232,6 @@ int main(void)
 				break;
 		}
 
-		Delay_ms(1);
 	}
 }
 #endif

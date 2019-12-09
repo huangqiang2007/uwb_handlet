@@ -121,7 +121,7 @@ void uartSetup(void)
 	uartInit.enable       = usartDisable;   /* Don't enable UART upon intialization */
 	uartInit.refFreq      = 0;              /* Provide information on reference frequency. When set to 0, the reference frequency is */
 	uartInit.baudrate     = 256000;//256000;         /* Baud rate *///115200 transfers to 148720
-	uartInit.oversampling = usartOVS16;     /* Oversampling. Range is 4x, 6x, 8x or 16x */
+	uartInit.oversampling = usartOVS8;     /* Oversampling. Range is 4x, 6x, 8x or 16x */
 	uartInit.databits     = usartDatabits8; /* Number of data bits. Range is 4 to 10 */
 	uartInit.parity       = usartNoParity; /* Parity mode */
 	uartInit.stopbits     = usartStopbits1; /* Number of stop bits. Range is 0 to 2 */
@@ -318,12 +318,50 @@ bool parseSleepCMD(sleepCMD_t *cmd)
 	return false;
 }
 
+sleepCMD_t sleepSubCMD = {
+		.begin = "begin",
+		.frameLen = 0x0c,
+		.reserve = {0},
+		.sleepCmd = {0x94, 0xee},
+		.crc = {0x9d, 0xee},
+		.end = "end-",
+};
+
+bool parseSleepSubCMD(sleepCMD_t *cmd)
+{
+	if (!strncmp((char *)cmd->begin, (char *)sleepSubCMD.begin, 5)
+		&& !strncmp((char *)cmd->sleepCmd, (char *)sleepSubCMD.sleepCmd, 2)) {
+		return true;
+	}
+
+	return false;
+}
+
+sleepCMD_t ConfigCMD = {
+		.begin = "begin",
+		.frameLen = 0x0c,
+		.reserve = {0},
+		.sleepCmd = {0x92, 0xee},
+		.crc = {0x9d, 0xee},
+		.end = "end-",
+};
+
+bool parseConfigCMD(sleepCMD_t *cmd)
+{
+	if (!strncmp((char *)cmd->begin, (char *)ConfigCMD.begin, 5)
+		&& !strncmp((char *)cmd->sleepCmd, (char *)ConfigCMD.sleepCmd, 2)) {
+		return true;
+	}
+
+	return false;
+}
+
 uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 {
 	uint32_t i = 0;
 	uint32_t dataLen;
-	uint8_t *str = "here\n";
-	uint8_t *str2 = "here2\n";
+//	uint8_t *str = "here\n";
+//	uint8_t *str2 = "here2\n";
 	static int rdi1 = -1, rdi2 = -1;
 
 	if (rxBuf.pendingBytes < SLEEPCMD_LEN)
@@ -336,7 +374,7 @@ uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 		if (rxBuf.data[rxBuf.rdI] == 0x62) {
 			rcvMessage->searchHeadFlag = true;
 			rcvMessage->len = 0;
-			uartPutData(str, 5);
+//			uartPutData(str, 5);
 			if (rdi1 == -1)
 				rdi1 = rxBuf.rdI;
 			else if (rdi2 == -1)
@@ -347,6 +385,30 @@ uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 			rcvMessage->rcvBytes[rcvMessage->len++] = rxBuf.data[rxBuf.rdI];
 			if (rcvMessage->len == SLEEPCMD_LEN) {
 				if (parseSleepCMD((sleepCMD_t *)rcvMessage->rcvBytes)) {
+					g_cur_mode = MAIN_CENTERSLEEPMODE;
+					NVIC_DisableIRQ(USART0_RX_IRQn);
+					rxBuf.pendingBytes -= SLEEPCMD_LEN;
+					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+					i++;
+					NVIC_EnableIRQ(USART0_RX_IRQn);
+					//uartPutData((uint8_t *)&g_recvSlaveFr, sizeof(struct MainCtrlFrame));
+//					uartPutData(str2, 6);
+					rdi1 = rdi2 = -1;
+					return 1000;
+				}
+				else if (parseConfigCMD((sleepCMD_t *)rcvMessage->rcvBytes)) {
+					g_cur_mode = MAIN_IDLEMODE;
+					SET_NUM = rcvMessage->rcvBytes[13] >> 2; //set number
+					MAIN_NODE_ID = (SET_NUM - 1) << 2;
+					NVIC_DisableIRQ(USART0_RX_IRQn);
+					rxBuf.pendingBytes -= SLEEPCMD_LEN;
+					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+					i++;
+					NVIC_EnableIRQ(USART0_RX_IRQn);
+					rdi1 = rdi2 = -1;
+					return 2000;
+				}
+				else if (parseSleepSubCMD((sleepCMD_t *)rcvMessage->rcvBytes)){
 					g_cur_mode = MAIN_SLEEPMODE;
 					NVIC_DisableIRQ(USART0_RX_IRQn);
 					rxBuf.pendingBytes -= SLEEPCMD_LEN;
@@ -354,10 +416,11 @@ uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 					i++;
 					NVIC_EnableIRQ(USART0_RX_IRQn);
 					//uartPutData((uint8_t *)&g_recvSlaveFr, sizeof(struct MainCtrlFrame));
-					uartPutData(str2, 6);
+//					uartPutData(str2, 6);
 					rdi1 = rdi2 = -1;
-					return i;
-				} else {
+					return 3000;
+				}
+				else {
 					rcvMessage->searchHeadFlag = false;
 				}
 			}
@@ -400,7 +463,7 @@ uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 SL_ALIGN(DMACTRL_ALIGNMENT)
 DMA_DESCRIPTOR_TypeDef dmaControlBlock1[DMACTRL_CH_CNT * 2] SL_ATTRIBUTE_ALIGN(DMACTRL_ALIGNMENT);
 
-#define CMD_LEN 1
+#define CMD_LEN 22
 uint8_t g_primaryResultBuffer[CMD_LEN] = {0}, g_alterResultBuffer[CMD_LEN] = {0};
 DMA_CB_TypeDef dma_uart_cb;
 

@@ -23,10 +23,11 @@ volatile uint32_t g_cmd_wake_wait_time; /* the count of 1ms unit */
 /*
  * CMD feedback timeout judge
  *
- * represent 30 * 1ms = 1s timeout
+ * represent 4 * 1ms = 4ms timeout
  * */
-#define CMD_FEEDBACK_TIMEOUT 3 /* receive wait response timeout 10ms*/
+//#define CMD_FEEDBACK_TIMEOUT 3 /* receive wait response timeout 10ms*/
 volatile uint32_t g_cmd_feedback_timeout; /* the count of 1ms unit */
+volatile uint8_t CMD_FEEDBACK_TIMEOUT;
 
 /*
  * wakeup duration
@@ -36,6 +37,14 @@ volatile uint32_t g_cmd_feedback_timeout; /* the count of 1ms unit */
 #define WAKUP_DURATION 610000 /* wake up time 610 second*/
 volatile uint32_t g_wakup_timeout; /* the count of 1ms unit */
 
+
+/*
+ * sleep command duration
+ *
+ * 600000 * 1ms = 10 minutes
+ * */
+#define SLEEP_DURATION 10000 /* wake up time 610 second*/
+volatile uint32_t g_sleep_timeout; /* the count of 1ms unit */
 /*
  * slave does not receive new CMD during the below duration, enter into sleep mode.
  *
@@ -49,7 +58,7 @@ void setupTimer0(void);
 void setupTimer1(void);
 extern void Delay_ms(uint32_t ms);
 extern void Delay_us(uint32_t us);
-extern void timerInit(void);
-void delayms(uint32_t ms);
+extern void timer_init(void);
+extern void delayms(uint32_t ms);
 
 #endif /* INLCUDE_TIMER_H_ */
