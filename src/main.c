@@ -4,6 +4,7 @@
 #include "em_cmu.h"
 #include "em_adc.h"
 #include "em_cmu.h"
+#include "em_dma.h"
 #include "timer.h"
 #include "udelay.h"
 #include "hal-config.h"
@@ -13,7 +14,7 @@
 #include "spidrv.h"
 #include "Typedefs.h"
 #include "libdw1000.h"
-#include "em_dma.h"
+#include "update.h"
 
 //extern volatile int8_t g_slaveWkup;
 
@@ -119,7 +120,7 @@ void spiDMA_test(dwDevice_t *dev)
 void uart_rx_test(void)
 {
 	while (1) {
-		checkSleepCMD(&g_rcvMessage);
+		checkUartCMD(&g_rcvMessage);
 	}
 }
 
@@ -188,10 +189,16 @@ int main(void)
 	Delay_ms(5);
 	GPIO_PinModeSet(gpioPortA, 2, gpioModePushPull, 1);
 
-	dwDeviceInit(&g_dwDev);
+	//dwDeviceInit(&g_dwDev);
 
   	UDELAY_Calibrate();
   	Delay_ms(500);
+
+//  	uint8_t data[22] = {1,2,3,4,5,6,7,8,9};
+//  	while(1){
+//  	uartPutData(data, UARTCMD_LEN);
+//  	Delay_ms(1000);
+//  	}
 
 //	dwNewReceive(&g_dwDev);
 //	dwStartReceive(&g_dwDev);
@@ -201,7 +208,7 @@ int main(void)
 		 * if receive system sleep command, switch to
 		 * MAIN_SLEEPMODE
 		 * */
-		checkSleepCMD(&g_rcvMessage);
+
 
 		switch(g_cur_mode)
 		{
@@ -211,6 +218,11 @@ int main(void)
 
 			case MAIN_SAMPLEMODE:
 				RecvFromSlave(&g_dwDev);
+				checkUartCMD(&g_rcvMessage);
+				break;
+
+			case MAIN_SYNCMODE:
+				SyncSlave(&g_dwDev);
 				break;
 
 			case MAIN_IDLEMODE:
@@ -220,18 +232,21 @@ int main(void)
 			case MAIN_SLEEPMODE:
 				sleepSlave(&g_dwDev);
 				break;
+
 			case MAIN_CENTERSLEEPMODE:
 				sleepCenter(&g_dwDev);
 				break;
+			case MAIN_UPDATEMODE:
+				checkUpdateUartCMD(&g_rcvUpdateMessage);
+				break;
 			case DEFAULT_MODE:
 				g_cur_mode = DEFAULT_MODE;
+				checkUartCMD(&g_rcvMessage);
 				break;
 
 			default:
-				g_cur_mode = MAIN_WKUPMODE;
 				break;
 		}
-
 	}
 }
 #endif

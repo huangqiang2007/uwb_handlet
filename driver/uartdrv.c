@@ -9,7 +9,11 @@
 #include "main.h"
 #include "uartdrv.h"
 #include "mainctrl.h"
+#include "libdw1000.h"
 #include "string.h"
+#include "crc.h"
+#include "update.h"
+#include "timer.h"
 
 #define UART_FRAMR_QUEUE_LEN_10 10
 
@@ -120,7 +124,7 @@ void uartSetup(void)
 	 * */
 	uartInit.enable       = usartDisable;   /* Don't enable UART upon intialization */
 	uartInit.refFreq      = 0;              /* Provide information on reference frequency. When set to 0, the reference frequency is */
-	uartInit.baudrate     = 256000;//256000;         /* Baud rate *///115200 transfers to 148720
+	uartInit.baudrate     = 460800;         /* Baud rate *///115200 transfers to 148720
 	uartInit.oversampling = usartOVS8;     /* Oversampling. Range is 4x, 6x, 8x or 16x */
 	uartInit.databits     = usartDatabits8; /* Number of data bits. Range is 4 to 10 */
 	uartInit.parity       = usartNoParity; /* Parity mode */
@@ -299,79 +303,110 @@ uint32_t uartGetData(uint8_t * dataPtr, uint32_t dataLen)
 	return i;
 }
 
-sleepCMD_t sleepCMD = {
+uartCMD_t sleepCMD = {
 		.begin = "begin",
 		.frameLen = 0x0c,
 		.reserve = {0},
-		.sleepCmd = {0x91, 0xee},
+		.uartCmd = {0x91, 0xee},
 		.crc = {0x9d, 0xee},
 		.end = "end-",
 };
 
-bool parseSleepCMD(sleepCMD_t *cmd)
+bool parseSleepCMD(uartCMD_t *cmd)
 {
 	if (!strncmp((char *)cmd->begin, (char *)sleepCMD.begin, 5)
-		&& !strncmp((char *)cmd->sleepCmd, (char *)sleepCMD.sleepCmd, 2)) {
+		&& !strncmp((char *)cmd->uartCmd, (char *)sleepCMD.uartCmd, 2)) {
 		return true;
 	}
 
 	return false;
 }
 
-sleepCMD_t sleepSubCMD = {
+uartCMD_t sleepSubCMD = {
 		.begin = "begin",
 		.frameLen = 0x0c,
 		.reserve = {0},
-		.sleepCmd = {0x94, 0xee},
+		.uartCmd = {0x94, 0xee},
 		.crc = {0x9d, 0xee},
 		.end = "end-",
 };
 
-bool parseSleepSubCMD(sleepCMD_t *cmd)
+bool parseSleepSubCMD(uartCMD_t *cmd)
 {
 	if (!strncmp((char *)cmd->begin, (char *)sleepSubCMD.begin, 5)
-		&& !strncmp((char *)cmd->sleepCmd, (char *)sleepSubCMD.sleepCmd, 2)) {
+		&& !strncmp((char *)cmd->uartCmd, (char *)sleepSubCMD.uartCmd, 2)) {
 		return true;
 	}
 
 	return false;
 }
 
-sleepCMD_t ConfigCMD = {
+uartCMD_t ConfigCMD = {
 		.begin = "begin",
 		.frameLen = 0x0c,
 		.reserve = {0},
-		.sleepCmd = {0x92, 0xee},
+		.uartCmd = {0x92, 0xee},
 		.crc = {0x9d, 0xee},
 		.end = "end-",
 };
 
-bool parseConfigCMD(sleepCMD_t *cmd)
+bool parseConfigCMD(uartCMD_t *cmd)
 {
 	if (!strncmp((char *)cmd->begin, (char *)ConfigCMD.begin, 5)
-		&& !strncmp((char *)cmd->sleepCmd, (char *)ConfigCMD.sleepCmd, 2)) {
+		&& !strncmp((char *)cmd->uartCmd, (char *)ConfigCMD.uartCmd, 2)) {
 		return true;
 	}
 
 	return false;
 }
 
-uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
+uartCMD_t UpdateCMD = {
+		.begin = "begin",
+		.frameLen = 0x0c,
+		.reserve = {0},
+		.uartCmd = {0xb5, 0xcc},
+		.crc = {0x9d, 0xee},
+		.end = "end-",
+};
+
+bool parseUpdateCMD(uartCMD_t *cmd)
+{
+	if (!strncmp((char *)cmd->begin, (char *)UpdateCMD.begin, 5)
+		&& !strncmp((char *)cmd->uartCmd, (char *)UpdateCMD.uartCmd, 2)) {
+		return true;
+	}
+
+	return false;
+}
+
+bool frame_check(rcvUpdateMsg_t *rcvMessage){
+	  uint16_t crc=0;
+
+	  crc = rcvMessage->rcvBytes[UPDATECMD_LEN-1];
+	  crc = (crc<<8) | rcvMessage->rcvBytes[UPDATECMD_LEN-2];
+	  if (CalCRC16(&rcvMessage->rcvBytes[0], UPDATECMD_LEN-2) == crc)
+		  return true;
+	  else
+		  return false;
+}
+
+uint32_t checkUartCMD(rcvMsg_t *rcvMessage)
 {
 	uint32_t i = 0;
 	uint32_t dataLen;
 //	uint8_t *str = "here\n";
+	uint16_t crc=0;
 //	uint8_t *str2 = "here2\n";
 	static int rdi1 = -1, rdi2 = -1;
 
-	if (rxBuf.pendingBytes < SLEEPCMD_LEN)
+	if (rxBuf.pendingBytes < UARTCMD_LEN)
 		return 0;
 
 	dataLen = rxBuf.pendingBytes;
 
 	/* Copy data from Rx buffer to dataPtr */
 	while (i < dataLen) {
-		if (rxBuf.data[rxBuf.rdI] == 0x62) {
+		if (rxBuf.data[rxBuf.rdI] == 0x62 && rxBuf.data[rxBuf.rdI+1] == 0x65) {
 			rcvMessage->searchHeadFlag = true;
 			rcvMessage->len = 0;
 //			uartPutData(str, 5);
@@ -383,42 +418,72 @@ uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 
 		if (rcvMessage->searchHeadFlag) {
 			rcvMessage->rcvBytes[rcvMessage->len++] = rxBuf.data[rxBuf.rdI];
-			if (rcvMessage->len == SLEEPCMD_LEN) {
-				if (parseSleepCMD((sleepCMD_t *)rcvMessage->rcvBytes)) {
+			if (rcvMessage->len == UARTCMD_LEN) {
+				if (parseSleepCMD((uartCMD_t *)rcvMessage->rcvBytes)) {
 					g_cur_mode = MAIN_CENTERSLEEPMODE;
 					NVIC_DisableIRQ(USART0_RX_IRQn);
-					rxBuf.pendingBytes -= SLEEPCMD_LEN;
+					rxBuf.pendingBytes -= UARTCMD_LEN;
 					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
 					i++;
 					NVIC_EnableIRQ(USART0_RX_IRQn);
-					//uartPutData((uint8_t *)&g_recvSlaveFr, sizeof(struct MainCtrlFrame));
-//					uartPutData(str2, 6);
 					rdi1 = rdi2 = -1;
 					return 1000;
 				}
-				else if (parseConfigCMD((sleepCMD_t *)rcvMessage->rcvBytes)) {
-					g_cur_mode = MAIN_IDLEMODE;
+				else if (parseSleepSubCMD((uartCMD_t *)rcvMessage->rcvBytes)){
+					g_cur_mode = MAIN_SLEEPMODE;
+					NVIC_DisableIRQ(USART0_RX_IRQn);
+					rxBuf.pendingBytes -= UARTCMD_LEN;
+					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+					i++;
+					NVIC_EnableIRQ(USART0_RX_IRQn);
+					rdi1 = rdi2 = -1;
+					return 1000;
+				}
+				else if (parseConfigCMD((uartCMD_t *)rcvMessage->rcvBytes)) {
 					SET_NUM = rcvMessage->rcvBytes[13] >> 2; //set number
 					MAIN_NODE_ID = (SET_NUM - 1) << 2;
 					NVIC_DisableIRQ(USART0_RX_IRQn);
-					rxBuf.pendingBytes -= SLEEPCMD_LEN;
+					rxBuf.pendingBytes -= UARTCMD_LEN;
 					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
 					i++;
 					NVIC_EnableIRQ(USART0_RX_IRQn);
 					rdi1 = rdi2 = -1;
-					return 2000;
-				}
-				else if (parseSleepSubCMD((sleepCMD_t *)rcvMessage->rcvBytes)){
-					g_cur_mode = MAIN_SLEEPMODE;
-					NVIC_DisableIRQ(USART0_RX_IRQn);
-					rxBuf.pendingBytes -= SLEEPCMD_LEN;
-					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
-					i++;
-					NVIC_EnableIRQ(USART0_RX_IRQn);
-					//uartPutData((uint8_t *)&g_recvSlaveFr, sizeof(struct MainCtrlFrame));
-//					uartPutData(str2, 6);
-					rdi1 = rdi2 = -1;
+					InitFrame(&g_mainCtrlFr, 0, 0, 10, 0, 0, 0);
+					globalInit();
+					dwDeviceInit(&g_dwDev);
+					g_cur_mode = MAIN_IDLEMODE;
 					return 3000;
+				}
+				else if (parseUpdateCMD((uartCMD_t *)rcvMessage->rcvBytes)){
+					NVIC_DisableIRQ(USART0_RX_IRQn);
+					globalInit();
+					dwDeviceInit(&g_dwDev);
+					Delay_ms(5);
+					UPDATE_NODE_ID = rcvMessage->rcvBytes[6];
+					initUpdateBeginFrm(&g_rcvUpdateMessage, UPDATE_NODE_ID);
+					CMD_FEEDBACK_TIMEOUT = 2000;
+					if (sendUpdatetoSlave(&g_dwDev, &g_rcvUpdateMessage) == 0){
+						if (frame_check(&g_rcvUpdateMessage)) {
+						//if (g_rcvUpdateMessage.rcvBytes[0] == 0xaa && g_rcvUpdateMessage.rcvBytes[1] == 0x55) {
+							rcvMessage->rcvBytes[12] = 0x02;
+							rcvMessage->rcvBytes[13] = 0x01;
+							for (int j=0;j<16;j++){
+								crc = crc + rcvMessage->rcvBytes[j];
+							}
+							rcvMessage->rcvBytes[16] = crc;
+							rcvMessage->rcvBytes[17] = crc>>8;
+							uartPutData(rcvMessage->rcvBytes, UARTCMD_LEN);
+							//Delay_ms(1000);
+							g_cur_mode = MAIN_UPDATEMODE;
+							memset(&g_rcvUpdateMessage.rcvBytes, 0x00, sizeof(g_rcvUpdateMessage));
+						}
+					}
+					rxBuf.pendingBytes -= UARTCMD_LEN;
+					rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+					i++;
+					NVIC_EnableIRQ(USART0_RX_IRQn);
+					rdi1 = rdi2 = -1;
+					return 4000;
 				}
 				else {
 					rcvMessage->searchHeadFlag = false;
@@ -439,6 +504,71 @@ uint32_t checkSleepCMD(rcvMsg_t *rcvMessage)
 
 	return i;
 }
+
+uint32_t checkUpdateUartCMD(rcvUpdateMsg_t *rcvMessage)
+{
+	uint32_t i = 0;
+	uint32_t dataLen;
+//	uint16_t crc;
+//	uint8_t *str = "here\n";
+//	uint8_t *str2 = "here2\n";
+	static int rdi1 = -1, rdi2 = -1;
+
+	if (rxBuf.pendingBytes < UPDATECMD_LEN)
+		return 0;
+
+	dataLen = rxBuf.pendingBytes;
+
+	/* Copy data from Rx buffer to dataPtr */
+	while (i < dataLen) {
+		if (rxBuf.data[rxBuf.rdI] == 0xaa && rxBuf.data[rxBuf.rdI+1] == 0x55) {
+			rcvMessage->searchHeadFlag = true;
+			rcvMessage->len = 0;
+			if (rdi1 == -1)
+				rdi1 = rxBuf.rdI;
+			else if (rdi2 == -1)
+				rdi2 = rxBuf.rdI;
+		}
+
+		if (rcvMessage->searchHeadFlag) {
+			rcvMessage->rcvBytes[rcvMessage->len++] = rxBuf.data[rxBuf.rdI];
+			if (rcvMessage->len == UPDATECMD_LEN) {
+				NVIC_DisableIRQ(USART0_RX_IRQn);
+				if (frame_check(rcvMessage)) {
+				//if (rcvMessage->rcvBytes[0] == 0xaa && rcvMessage->rcvBytes[1] == 0x55){
+					CMD_FEEDBACK_TIMEOUT = 500;
+					if (sendUpdatetoSlave(&g_dwDev, rcvMessage) == 0){
+						uartPutData(rcvMessage->rcvBytes, UPDATECMD_LEN);
+						//Delay_ms(1000);
+						if ((rcvMessage->rcvBytes[9] & 0x0f)== 0x06){
+							g_cur_mode = DEFAULT_MODE;
+						}
+					}
+				}
+				rxBuf.pendingBytes -= UPDATECMD_LEN;
+				rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+				i++;
+				NVIC_EnableIRQ(USART0_RX_IRQn);
+				rdi1 = rdi2 = -1;
+				return 1000;
+			}
+		}
+
+		rxBuf.rdI = (rxBuf.rdI + 1) % BUFFERSIZE;
+		i++;
+	}
+
+	/* Decrement pending byte counter */
+	NVIC_DisableIRQ(USART0_RX_IRQn);
+	//CORE_CriticalDisableIrq();
+	rxBuf.pendingBytes -= dataLen;
+	//CORE_CriticalEnableIrq();
+	NVIC_EnableIRQ(USART0_RX_IRQn);
+
+	return i;
+}
+
+
 
 /*
  * the below logic is for UART-Rx DMA feature.

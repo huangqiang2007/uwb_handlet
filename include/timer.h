@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+
+#define MS_COUNT  3125  //25000000 / 8 / 1000
 /*
  * UnWake Slave CMD timeout judge
  *
@@ -11,6 +13,14 @@
  * */
 #define UNWAKE_CMD_TIMEOUT 2 /* unwake slave timeout 2ms*/
 volatile uint32_t g_cmd_unwake_timeout; /* the count of 1ms unit */
+
+/*
+ * Sync Slave ADC time
+ *
+ * represent 20000 * 1ms = 20s timeout
+ * */
+#define SYNC_CMD_TIMEOUT 2000 /* unwake slave timeout 2ms*/
+volatile uint32_t g_cmd_sync_timeout; /* the count of 1ms unit */
 
 /*
  * Wake Slave CMD wait time judge
@@ -27,14 +37,14 @@ volatile uint32_t g_cmd_wake_wait_time; /* the count of 1ms unit */
  * */
 //#define CMD_FEEDBACK_TIMEOUT 3 /* receive wait response timeout 10ms*/
 volatile uint32_t g_cmd_feedback_timeout; /* the count of 1ms unit */
-volatile uint8_t CMD_FEEDBACK_TIMEOUT;
+volatile uint32_t CMD_FEEDBACK_TIMEOUT;
 
 /*
  * wakeup duration
  *
  * 600000 * 1ms = 10 minutes
  * */
-#define WAKUP_DURATION 610000 /* wake up time 610 second*/
+#define WAKUP_DURATION 31000 /* wake up time 610 second*/
 volatile uint32_t g_wakup_timeout; /* the count of 1ms unit */
 
 
@@ -53,7 +63,9 @@ volatile uint32_t g_sleep_timeout; /* the count of 1ms unit */
 #define IDLE_JUDGE 300000
 volatile uint32_t g_idle_judge;
 
-void timer_init(void);
+volatile bool Timer1_overflow;
+volatile uint32_t g_Ticks;
+
 void setupTimer0(void);
 void setupTimer1(void);
 extern void Delay_ms(uint32_t ms);

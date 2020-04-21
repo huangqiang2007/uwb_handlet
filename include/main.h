@@ -6,6 +6,7 @@
 
 volatile uint8_t MAIN_NODE_ID;
 volatile uint8_t SET_NUM;
+volatile uint8_t UPDATE_NODE_ID;
 
 /** DMA channel used for scan sequence sampling adc channel 2, 3 and 4. */
 #define DMA_CHANNEL    	2

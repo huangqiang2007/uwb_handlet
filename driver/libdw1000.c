@@ -21,6 +21,7 @@
 #include <string.h>
 #include <math.h>
 #include "em_cmu.h"
+#include "em_timer.h"
 #include "em_gpio.h"
 #include "spidrv.h"
 #include "timer.h"
@@ -84,7 +85,7 @@ void dwInit(dwDevice_t* dev, uint16_t PanID, uint16_t sourceAddr)
 	dev->preambleCode = PREAMBLE_CODE_64MHZ_9;
 	dev->channel = CHANNEL_2;
 	dev->smartPower = true;
-	dev->frameCheck = true;
+	dev->frameCheck = false;
 	dev->permanentReceive = false;
 	dev->deviceMode = IDLE_MODE;
 	dev->wait4resp = false;
@@ -682,7 +683,7 @@ void dwSetcentreNodeConfig(dwDevice_t* dev) {
 //		dwSetFrameFilterBehaveCoordinator(dev, true);
 
 		//interrupt active for complete transmit
-		dwInterruptOnSent(dev, false);
+		dwInterruptOnSent(dev, true);
 		//interrupt active for complete receive
 		dwInterruptOnReceived(dev, true);
 		//interrupt active for receiver timeout when dwSetReceiveWaitTimeout() is enable true
@@ -725,7 +726,7 @@ void dwSetSubNodeConfig(dwDevice_t* dev) {
 		//set 3us to transmit ACK after receive and 300us to turn on receiver after transmit
 		dwSetAckAndRespTime(dev, 3, 30);
 		//set CRC frame check
-		dwSuppressFrameCheck(dev, false);
+		dwSuppressFrameCheck(dev, true);
 		//set receiver timeout turn-off time
 		dwSetReceiveWaitTimeout(dev,0);
 
@@ -1667,12 +1668,21 @@ void dwSendData(dwDevice_t *dev, uint8_t data[], uint32_t len)
 }
 
 /*
+ * send data to slave
+ * */
+void dwSendData_noTurnon(dwDevice_t *dev, uint8_t data[], uint32_t len)
+{
+	dwNewTransmit(dev);
+	dwSetData(dev, data, len);
+	dwStartTransmit(dev);
+}
+
+/*
  * receive data from slave
  * */
 void dwRecvData(dwDevice_t *dev)
 {
 	int len = 0;
-
 	memset((void *)&g_dwMacFrameRecv, 0x00, sizeof(g_dwMacFrameRecv));
 //	dwNewReceive(dev);
 //	dwStartReceive(dev);
@@ -1686,7 +1696,9 @@ void dwRecvData(dwDevice_t *dev)
 
 void dwSentData(dwDevice_t *dev)
 {
-	;
+	time_us[i] = g_Ticks * MS_COUNT + TIMER_CounterGet(TIMER0); //get the initial time;
+	TD[i] = time_us[i] - timer_cnt[i]; //get the interval time
+	timer_cnt[i] = time_us[i]; //get the initial time;
 }
 
 void dwReceiveFailed(dwDevice_t *dev){

@@ -8,7 +8,7 @@
 
 #define SLAVE_NUMS 4
 
-enum {MAIN_IDLEMODE=0, MAIN_WKUPMODE, MAIN_SAMPLEMODE, MAIN_SLEEPMODE, MAIN_CENTERSLEEPMODE,DEFAULT_MODE};
+enum {MAIN_IDLEMODE=0, MAIN_WKUPMODE, MAIN_SAMPLEMODE, MAIN_SYNCMODE, MAIN_SLEEPMODE, MAIN_CENTERSLEEPMODE, MAIN_UPDATEMODE, DEFAULT_MODE};
 
 /*
  * slave waken up flag
@@ -43,11 +43,15 @@ enum {
 	ENUM_SLAVE_STATUS,
 	ENUM_SLAVE_STATUS_TOKEN,
 	ENUM_SLAVE_SLEEP,
-	ENUM_SLAVE_SLEEP_TOKEN
+	ENUM_SLAVE_SLEEP_TOKEN,
+	ENUM_SLAVE_SYNC,
+	ENUM_SLAVE_SYNC_TOKEN,
+	ENUM_REPEAT_DATA,
+	ENUM_REPEAT_DATA_TOKEN
 };
 
-#define FRAME_DATA_LEN 64
-#define FRAME_LEN 76
+#define FRAME_DATA_LEN 100
+#define FRAME_LEN 112
 
 struct MainCtrlFrame {
 	uint8_t head0; //0xeb
@@ -58,7 +62,7 @@ struct MainCtrlFrame {
 	uint8_t frameCtrl_blank[3];
 	uint8_t frameCtrl;
 	uint8_t frameType;
-	uint8_t blank;
+	uint8_t adcIndex;
 	uint8_t data[FRAME_DATA_LEN];
 	uint8_t crc0; // crc[7:0]
 };
@@ -75,31 +79,22 @@ struct RS422DataFrame {
 	uint8_t crc1; // crc[15:8]
 };
 
-#define SLEEPCMD_LEN 22
-typedef struct rcvMsg {
-	uint8_t rcvBytes[SLEEPCMD_LEN];
-	uint8_t len;
-	bool searchHeadFlag;
-} rcvMsg_t;
 
-typedef struct sleepCMD {
-	uint8_t begin[5];
-	uint8_t frameLen;
-	uint8_t reserve[8];
-	uint8_t sleepCmd[2];
-	uint8_t crc[2];
-	uint8_t end[4];
-} __attribute__((packed)) sleepCMD_t;
 
 struct MainCtrlFrame g_mainCtrlFr, g_recvSlaveFr;
 dwMacFrame_t g_dwMacFrameSend, g_dwMacFrameRecv;
 //struct RS422DataFrame g_RS422DataFr;
-rcvMsg_t g_rcvMessage;
+
 
 volatile int8_t g_cur_mode;
 volatile int8_t g_slaveWkup;
 volatile bool g_dataRecvDone;
 volatile bool g_dataRecvFail;
+uint32_t timer_cnt[4];
+uint32_t TOA_T[4];
+uint32_t TD[4];
+uint32_t time_us[4];
+volatile int i;
 
 extern void globalInit(void);
 extern uint16_t CalFrameCRC(uint8_t data[], int len);
@@ -107,6 +102,8 @@ extern void WakeupSlave(dwDevice_t *dev);
 extern void sleepSlave(dwDevice_t *dev);
 extern void sleepCenter(dwDevice_t *dev);
 extern void RecvFromSlave(dwDevice_t *dev);
+extern void SyncSlave(dwDevice_t *dev);
 extern void powerADandUWB(uint8_t master);
+void InitFrame(struct MainCtrlFrame *mainCtrlFr, uint8_t src, uint8_t slave, uint8_t type, uint32_t TOA_T, uint32_t TD, uint32_t TSTD);
 
 #endif
