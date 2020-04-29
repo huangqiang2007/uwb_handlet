@@ -44,7 +44,7 @@ volatile uint32_t CMD_FEEDBACK_TIMEOUT;
  *
  * 600000 * 1ms = 10 minutes
  * */
-#define WAKUP_DURATION 31000 /* wake up time 610 second*/
+#define WAKUP_DURATION 610000 /* wake up time 610 second*/
 volatile uint32_t g_wakup_timeout; /* the count of 1ms unit */
 
 

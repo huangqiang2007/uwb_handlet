@@ -683,7 +683,7 @@ void dwSetcentreNodeConfig(dwDevice_t* dev) {
 //		dwSetFrameFilterBehaveCoordinator(dev, true);
 
 		//interrupt active for complete transmit
-		dwInterruptOnSent(dev, true);
+		dwInterruptOnSent(dev, false);
 		//interrupt active for complete receive
 		dwInterruptOnReceived(dev, true);
 		//interrupt active for receiver timeout when dwSetReceiveWaitTimeout() is enable true
@@ -1683,10 +1683,10 @@ void dwSendData_noTurnon(dwDevice_t *dev, uint8_t data[], uint32_t len)
 void dwRecvData(dwDevice_t *dev)
 {
 	int len = 0;
-	memset((void *)&g_dwMacFrameRecv, 0x00, sizeof(g_dwMacFrameRecv));
+	//memset((void *)&g_dwMacFrameRecv, 0x00, sizeof(g_dwMacFrameRecv));
 //	dwNewReceive(dev);
 //	dwStartReceive(dev);
-	len = dwGetDataLength(dev);
+	len = sizeof(g_recvSlaveFr);
 //	dwGetData(dev, (uint8_t *)&g_dwMacFrameRecv, len);
 //	memcpy((uint8_t *)&g_recvSlaveFr, g_dwMacFrameRecv.Payload, sizeof(g_recvSlaveFr));
 	dwGetData(dev, (uint8_t *)&g_recvSlaveFr, len);
@@ -1696,9 +1696,9 @@ void dwRecvData(dwDevice_t *dev)
 
 void dwSentData(dwDevice_t *dev)
 {
-	time_us[i] = g_Ticks * MS_COUNT + TIMER_CounterGet(TIMER0); //get the initial time;
-	TD[i] = time_us[i] - timer_cnt[i]; //get the interval time
-	timer_cnt[i] = time_us[i]; //get the initial time;
+//	time_us[i] = g_Ticks * MS_COUNT + TIMER_CounterGet(TIMER0); //get the initial time;
+//	TD[i] = time_us[i] - timer_cnt[i]; //get the interval time
+//	timer_cnt[i] = time_us[i]; //get the initial time;
 }
 
 void dwReceiveFailed(dwDevice_t *dev){
